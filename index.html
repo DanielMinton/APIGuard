@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APIGuard - Live API Monitor</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f0f1a 0%, #1a0a1a 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 1000px; margin: 0 auto; }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 4px;
+      background: linear-gradient(90deg, #10b981, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle { color: #888; font-size: 0.8rem; margin-bottom: 20px; }
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 999px;
+      font-size: 0.7rem;
+      color: #10b981;
+      margin-left: 12px;
+      vertical-align: middle;
+    }
+    .live-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: #10b981;
+      border-radius: 50%;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      align-items: center;
+    }
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: white;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .api-note {
+      font-size: 0.65rem;
+      color: #666;
+      margin-left: auto;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .stat-value.green { color: #10b981; }
+    .stat-value.red { color: #ef4444; }
+    .stat-value.yellow { color: #f59e0b; }
+    .stat-value.blue { color: #3b82f6; }
+    .stat-label { font-size: 0.7rem; color: #888; text-transform: uppercase; }
+
+    .endpoints-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .endpoint-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 16px;
+      transition: all 0.3s;
+    }
+    .endpoint-card.checking {
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+    .endpoint-card.healthy {
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    .endpoint-card.degraded {
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+    .endpoint-card.down {
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .endpoint-name {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .endpoint-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.7rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .endpoint-status.healthy { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+    .endpoint-status.degraded { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+    .endpoint-status.down { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+    .endpoint-status.checking { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .endpoint-url {
+      font-size: 0.7rem;
+      color: #666;
+      margin-bottom: 8px;
+      font-family: monospace;
+    }
+    .endpoint-description {
+      font-size: 0.7rem;
+      color: #888;
+      margin-bottom: 12px;
+      padding: 8px 10px;
+      background: rgba(16, 185, 129, 0.05);
+      border-left: 2px solid rgba(16, 185, 129, 0.3);
+      border-radius: 0 6px 6px 0;
+      line-height: 1.4;
+    }
+    .endpoint-category {
+      display: inline-block;
+      font-size: 0.6rem;
+      padding: 2px 8px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      color: #888;
+      margin-left: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .endpoint-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .metric {
+      background: rgba(0,0,0,0.2);
+      padding: 8px;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .metric-value {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #fff;
+    }
+    .metric-label {
+      font-size: 0.6rem;
+      color: #666;
+      text-transform: uppercase;
+    }
+    .latency-bar {
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+    .latency-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    .history-section {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .history-header {
+      padding: 12px 16px;
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+    }
+    .history-body {
+      padding: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .history-entry {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px;
+      margin-bottom: 6px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 6px;
+      font-size: 0.7rem;
+      opacity: 0;
+      animation: fadeIn 0.3s forwards;
+    }
+    @keyframes fadeIn { to { opacity: 1; } }
+    .history-time { color: #666; width: 70px; }
+    .history-endpoint { color: #888; flex: 1; }
+    .history-latency { font-weight: 600; width: 60px; text-align: right; }
+    .history-latency.fast { color: #10b981; }
+    .history-latency.medium { color: #f59e0b; }
+    .history-latency.slow { color: #ef4444; }
+    .history-status {
+      width: 20px;
+      text-align: center;
+    }
+
+    .chart-container {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .chart-title {
+      font-size: 0.75rem;
+      color: #888;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+    .latency-chart {
+      display: flex;
+      align-items: flex-end;
+      height: 80px;
+      gap: 3px;
+    }
+    .chart-bar {
+      flex: 1;
+      background: rgba(16, 185, 129, 0.3);
+      border-radius: 2px 2px 0 0;
+      transition: height 0.3s ease;
+      min-width: 8px;
+    }
+    .chart-bar.warning { background: rgba(245, 158, 11, 0.5); }
+    .chart-bar.error { background: rgba(239, 68, 68, 0.5); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>APIGuard <span class="live-badge">MONITORING</span></h1>
+    <p class="subtitle">Real-time API health monitoring and latency tracking</p>
+
+    <div class="controls">
+      <button class="btn btn-primary" id="runBtn" onclick="runHealthCheck()">Run Health Check</button>
+      <button class="btn btn-secondary" onclick="toggleAutoRefresh()">
+        <span id="autoRefreshLabel">Enable Auto-Refresh</span>
+      </button>
+      <span class="api-note">Monitoring real public APIs (GitHub, JSONPlaceholder, etc.)</span>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value green" id="healthyCount">0</div>
+        <div class="stat-label">Healthy</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value yellow" id="degradedCount">0</div>
+        <div class="stat-label">Degraded</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value red" id="downCount">0</div>
+        <div class="stat-label">Down</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value blue" id="avgLatency">--</div>
+        <div class="stat-label">Avg Latency</div>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-title">Latency History (Last 30 checks)</div>
+      <div class="latency-chart" id="latencyChart"></div>
+    </div>
+
+    <div class="endpoints-grid" id="endpointsGrid"></div>
+
+    <div class="history-section">
+      <div class="history-header">
+        <span>Health Check Log</span>
+        <span id="totalChecks">0 checks</span>
+      </div>
+      <div class="history-body" id="historyLog"></div>
+    </div>
+  </div>
+
+  <script>
+    const endpoints = [
+      {
+        name: 'GitHub API',
+        url: 'https://api.github.com',
+        category: 'Code',
+        description: 'GitHub REST API root endpoint - returns available API resources and rate limit info'
+      },
+      {
+        name: 'JSONPlaceholder',
+        url: 'https://jsonplaceholder.typicode.com/posts/1',
+        category: 'Test',
+        description: 'Mock REST API for testing - fetches a sample blog post (id: 1)'
+      },
+      {
+        name: 'HTTPBin',
+        url: 'https://httpbin.org/get',
+        category: 'Test',
+        description: 'HTTP testing service - returns request headers, IP, and query params'
+      },
+      {
+        name: 'Cat Facts API',
+        url: 'https://catfact.ninja/fact',
+        category: 'Fun',
+        description: 'Random cat facts API - returns a random fact about cats'
+      },
+      {
+        name: 'Dog CEO API',
+        url: 'https://dog.ceo/api/breeds/list/all',
+        category: 'Fun',
+        description: 'Dog breed database API - returns complete list of all dog breeds'
+      },
+      {
+        name: 'CoinGecko API',
+        url: 'https://api.coingecko.com/api/v3/ping',
+        category: 'Crypto',
+        description: 'Cryptocurrency data API - health check endpoint for API status'
+      }
+    ];
+
+    let endpointData = endpoints.map(e => ({
+      ...e,
+      status: 'unknown',
+      latency: null,
+      lastCheck: null,
+      checkCount: 0,
+      successCount: 0
+    }));
+
+    let latencyHistory = [];
+    let totalCheckCount = 0;
+    let autoRefreshInterval = null;
+
+    // Initialize endpoint cards
+    function initEndpoints() {
+      const grid = document.getElementById('endpointsGrid');
+      grid.innerHTML = '';
+
+      endpointData.forEach((endpoint, index) => {
+        const card = document.createElement('div');
+        card.className = 'endpoint-card';
+        card.id = `endpoint-${index}`;
+        card.innerHTML = `
+          <div class="endpoint-header">
+            <span class="endpoint-name">${endpoint.name}<span class="endpoint-category">${endpoint.category}</span></span>
+            <span class="endpoint-status" id="status-${index}">
+              <span class="status-dot"></span>
+              <span>Pending</span>
+            </span>
+          </div>
+          <div class="endpoint-url">${endpoint.url}</div>
+          <div class="endpoint-description">${endpoint.description}</div>
+          <div class="endpoint-metrics">
+            <div class="metric">
+              <div class="metric-value" id="latency-${index}">--</div>
+              <div class="metric-label">Latency</div>
+            </div>
+            <div class="metric">
+              <div class="metric-value" id="uptime-${index}">--%</div>
+              <div class="metric-label">Uptime</div>
+            </div>
+            <div class="metric">
+              <div class="metric-value" id="checks-${index}">0</div>
+              <div class="metric-label">Checks</div>
+            </div>
+          </div>
+          <div class="latency-bar">
+            <div class="latency-fill" id="latency-bar-${index}" style="width: 0%; background: #10b981;"></div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // Initialize latency chart
+    function initChart() {
+      const chart = document.getElementById('latencyChart');
+      chart.innerHTML = '';
+      for (let i = 0; i < 30; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'chart-bar';
+        bar.style.height = '5%';
+        chart.appendChild(bar);
+      }
+    }
+
+    async function checkEndpoint(index) {
+      const endpoint = endpointData[index];
+      const card = document.getElementById(`endpoint-${index}`);
+      const statusEl = document.getElementById(`status-${index}`);
+
+      card.className = 'endpoint-card checking';
+      statusEl.className = 'endpoint-status checking';
+      statusEl.innerHTML = '<span class="status-dot"></span><span>Checking...</span>';
+
+      const startTime = performance.now();
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(endpoint.url, {
+          method: 'GET',
+          mode: 'cors',
+          signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+
+        const latency = Math.round(performance.now() - startTime);
+        endpoint.latency = latency;
+        endpoint.lastCheck = new Date();
+        endpoint.checkCount++;
+        endpoint.successCount++;
+
+        // Determine status based on latency
+        if (latency < 500) {
+          endpoint.status = 'healthy';
+        } else if (latency < 1500) {
+          endpoint.status = 'degraded';
+        } else {
+          endpoint.status = 'degraded';
+        }
+
+        updateEndpointUI(index);
+        addHistoryEntry(endpoint.name, latency, true);
+
+        return { success: true, latency };
+
+      } catch (error) {
+        const latency = Math.round(performance.now() - startTime);
+        endpoint.latency = latency;
+        endpoint.lastCheck = new Date();
+        endpoint.checkCount++;
+        endpoint.status = 'down';
+
+        updateEndpointUI(index);
+        addHistoryEntry(endpoint.name, latency, false);
+
+        return { success: false, latency };
+      }
+    }
+
+    function updateEndpointUI(index) {
+      const endpoint = endpointData[index];
+      const card = document.getElementById(`endpoint-${index}`);
+      const statusEl = document.getElementById(`status-${index}`);
+
+      card.className = `endpoint-card ${endpoint.status}`;
+
+      const statusText = endpoint.status.charAt(0).toUpperCase() + endpoint.status.slice(1);
+      statusEl.className = `endpoint-status ${endpoint.status}`;
+      statusEl.innerHTML = `<span class="status-dot"></span><span>${statusText}</span>`;
+
+      document.getElementById(`latency-${index}`).textContent = `${endpoint.latency}ms`;
+      document.getElementById(`checks-${index}`).textContent = endpoint.checkCount;
+
+      const uptime = endpoint.checkCount > 0
+        ? Math.round((endpoint.successCount / endpoint.checkCount) * 100)
+        : 0;
+      document.getElementById(`uptime-${index}`).textContent = `${uptime}%`;
+
+      // Update latency bar
+      const maxLatency = 2000;
+      const width = Math.min((endpoint.latency / maxLatency) * 100, 100);
+      const barEl = document.getElementById(`latency-bar-${index}`);
+      barEl.style.width = `${width}%`;
+
+      if (endpoint.status === 'healthy') {
+        barEl.style.background = '#10b981';
+      } else if (endpoint.status === 'degraded') {
+        barEl.style.background = '#f59e0b';
+      } else {
+        barEl.style.background = '#ef4444';
+      }
+    }
+
+    function addHistoryEntry(name, latency, success) {
+      const log = document.getElementById('historyLog');
+      const entry = document.createElement('div');
+      entry.className = 'history-entry';
+
+      const time = new Date().toLocaleTimeString();
+      const latencyClass = latency < 300 ? 'fast' : latency < 800 ? 'medium' : 'slow';
+
+      entry.innerHTML = `
+        <span class="history-time">${time}</span>
+        <span class="history-endpoint">${name}</span>
+        <span class="history-latency ${latencyClass}">${latency}ms</span>
+        <span class="history-status">${success ? '✓' : '✗'}</span>
+      `;
+
+      log.insertBefore(entry, log.firstChild);
+      if (log.children.length > 50) log.removeChild(log.lastChild);
+
+      totalCheckCount++;
+      document.getElementById('totalChecks').textContent = `${totalCheckCount} checks`;
+    }
+
+    function updateStats() {
+      const healthy = endpointData.filter(e => e.status === 'healthy').length;
+      const degraded = endpointData.filter(e => e.status === 'degraded').length;
+      const down = endpointData.filter(e => e.status === 'down').length;
+
+      document.getElementById('healthyCount').textContent = healthy;
+      document.getElementById('degradedCount').textContent = degraded;
+      document.getElementById('downCount').textContent = down;
+
+      const latencies = endpointData.filter(e => e.latency !== null).map(e => e.latency);
+      if (latencies.length > 0) {
+        const avg = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
+        document.getElementById('avgLatency').textContent = `${avg}ms`;
+      }
+    }
+
+    function updateChart(avgLatency) {
+      latencyHistory.push(avgLatency);
+      if (latencyHistory.length > 30) latencyHistory.shift();
+
+      const chart = document.getElementById('latencyChart');
+      const bars = chart.children;
+      const maxLatency = Math.max(...latencyHistory, 500);
+
+      for (let i = 0; i < 30; i++) {
+        const value = latencyHistory[i] || 0;
+        const height = Math.max(5, (value / maxLatency) * 100);
+        bars[i].style.height = `${height}%`;
+
+        bars[i].className = 'chart-bar';
+        if (value > 1000) bars[i].classList.add('error');
+        else if (value > 500) bars[i].classList.add('warning');
+      }
+    }
+
+    async function runHealthCheck() {
+      const btn = document.getElementById('runBtn');
+      btn.disabled = true;
+      btn.textContent = 'Checking...';
+
+      const results = await Promise.all(
+        endpointData.map((_, index) => checkEndpoint(index))
+      );
+
+      updateStats();
+
+      const avgLatency = Math.round(
+        results.filter(r => r.success).reduce((sum, r) => sum + r.latency, 0) /
+        results.filter(r => r.success).length || 0
+      );
+      updateChart(avgLatency);
+
+      btn.disabled = false;
+      btn.textContent = 'Run Health Check';
+    }
+
+    function toggleAutoRefresh() {
+      const label = document.getElementById('autoRefreshLabel');
+
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        label.textContent = 'Enable Auto-Refresh';
+      } else {
+        autoRefreshInterval = setInterval(runHealthCheck, 15000);
+        label.textContent = 'Disable Auto-Refresh';
+        runHealthCheck(); // Run immediately
+      }
+    }
+
+    // Initialize
+    initEndpoints();
+    initChart();
+    runHealthCheck();
+  </script>
+</body>
+</html>
