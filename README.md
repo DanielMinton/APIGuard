@@ -15,8 +15,13 @@ APIGuard is a smart API gateway that learns traffic patterns and automatically a
 - **Traffic Analysis**: Deep insights into API usage patterns
 - **Auto-Scaling Limits**: Dynamic threshold adjustment during peak loads
 
-## Technical Stack
+## Tech Stack
 
+### Languages
+- **HTML** (1 file) - Static demo page with embedded JavaScript/CSS
+
+### Demonstration Tech
+This is a static HTML demo showcasing the concept. A production implementation would use:
 - **Go** - High-performance gateway core
 - **Redis** - Rate limit counters and caching
 - **TensorFlow.js** - Pattern recognition models
